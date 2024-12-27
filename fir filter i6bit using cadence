@@ -1,0 +1,551 @@
+
+module FIR(
+    input clk,
+    input reset,
+    input signed [15:0] s_axis_fir_tdata, 
+    input [3:0] s_axis_fir_tkeep,
+    input s_axis_fir_tlast,
+    input s_axis_fir_tvalid,
+    input m_axis_fir_tready,
+    output reg m_axis_fir_tvalid,
+    output reg s_axis_fir_tready,
+    output reg m_axis_fir_tlast,
+    output reg [3:0] m_axis_fir_tkeep,
+    output reg signed [31:0] m_axis_fir_tdata
+    );
+
+
+    always @ (posedge clk)
+        begin
+            m_axis_fir_tkeep <= 4'hf;
+        end
+        
+    always @ (posedge clk)
+        begin
+            if (s_axis_fir_tlast == 1'b1)
+                begin
+                    m_axis_fir_tlast <= 1'b1;
+                end
+            else
+                begin
+                    m_axis_fir_tla…
+
+module tb_FIR;
+
+    reg clk, reset, s_axis_fir_tvalid, m_axis_fir_tready;
+    reg signed [15:0] s_axis_fir_tdata;
+    wire m_axis_fir_tvalid;
+    wire [3:0] m_axis_fir_tkeep;
+    wire [31:0] m_axis_fir_tdata;
+    
+    /*
+     * 100Mhz (10ns) clock 
+     */
+    always begin
+        clk = 1; #5;
+        clk = 0; #5;
+    end
+    
+    always begin
+        reset = 1; #20;
+        reset = 0; #50;
+        reset = 1; #1000000;
+    end
+    
+    always begin
+        s_axis_fir_tvalid = 0; #100;
+        s_axis_fir_tvalid = 1; #1000;
+        s_axis_fir_tvalid = 0; #50;
+        s_axis_fir_tvalid = 1; #998920;
+    end
+    
+    always begin
+        m_axis_fir_tready = 1; #1500;
+        m_axis_fir_tready = 0; #100;
+        m_axis_fir_tready = 1; #998400;
+    end
+    
+    /* Instantiate FIR module to test. */
+    FIR FIR_i(
+        .clk(clk),
+        .reset(reset),
+        .s_axis_fir_tdata(s_axis_fir_tdata),   
+        .s_axis_fir_tkeep(s_axis_fir_tkeep),   
+        .s_axis_fir_tlast(s_axis_fir_tlast),   
+        .s_axis_fir_tvalid(s_axis_fir_tvalid), 
+        .m_axis_fir_tready(m_axis_fir_tready),
+        .m_axis_fir_tvalid(m_axis_fir_tvalid), 
+        .s_axis_fir_tready(s_axis_fir_tready), 
+        .m_axis_fir_tlast(m_axis_fir_tlast),   
+        .m_axis_fir_tkeep(m_axis_fir_tkeep),   
+        .m_axis_fir_tdata(m_axis_fir_tdata));  
+        
+    reg [4:0] state_reg;
+    reg [3:0] cntr;
+    
+    parameter wvfm_period = 4'd4;
+    
+    parameter init               = 5'd0;
+    parameter sendSample0        = 5'd1;
+    parameter sendSample1        = 5'd2;
+    parameter sendSample2        = 5'd3;
+    parameter sendSample3        = 5'd4;
+    parameter sendSample4        = 5'd5;
+    parameter sendSample5        = 5'd6;
+    parameter sendSample6        = 5'd7;
+    parameter sendSample7        = 5'd8;
+    
+    /* This state machine generates a 200kHz sinusoid. */
+    always @ (posedge clk or posedge reset)
+        begin
+            if (reset == 1'b0)
+                begin
+                    cntr <= 4'd0;
+                    s_axis_fir_tdata <= 16'd0;
+                    state_reg <= init;
+                end
+            else
+                begin
+                    case (state_reg)
+                        init : //0
+                            begin
+                                cntr <= 4'd0;
+                                s_axis_fir_tdata <= 16'h0000;
+                                state_reg <= sendSample0;
+                            end
+                            
+                        sendSample0 : //1
+                            begin
+                                s_axis_fir_tdata <= 16'h0000;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample1;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample0;
+                                    end
+                            end 
+                        
+                        sendSample1 : //2
+                            begin
+                                s_axis_fir_tdata <= 16'h5A7E; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample2;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample1;
+                                    end
+                            end 
+                        
+                        sendSample2 : //3
+                            begin
+                                s_axis_fir_tdata <= 16'h7FFF;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample3;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample2;
+                                    end
+                            end 
+                        
+                        sendSample3 : //4
+                            begin
+                                s_axis_fir_tdata <= 16'h5A7E;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample4;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample3;
+                                    end
+                            end 
+                        
+                        sendSample4 : //5
+                            begin
+                                s_axis_fir_tdata <= 16'h0000;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample5;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample4;
+                                    end
+                            end 
+                        
+                        sendSample5 : //6
+                            begin
+                                s_axis_fir_tdata <= 16'hA582; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample6;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample5;
+                                    end
+                            end 
+                        
+                        sendSample6 : //6
+                            begin
+                                s_axis_fir_tdata <= 16'h8000; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample7;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample6;
+                                    end
+                            end 
+                        
+                        sendSample7 : //6
+                            begin
+                                s_axis_fir_tdata <= 16'hA582; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample0;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample7;
+                                    end
+                            end                     
+                    
+                    endcase
+                end
+        end
+    
+endmodule
+
+
+
+
+
+
+ 
+
+module tb_FIR;
+
+    reg clk, reset, s_axis_fir_tvalid, m_axis_fir_tready;
+    reg signed [15:0] s_axis_fir_tdata;
+    wire m_axis_fir_tvalid;
+    wire [3:0] m_axis_fir_tkeep;
+    wire [31:0] m_axis_fir_tdata;
+    
+    /*
+     * 100Mhz (10ns) clock 
+     */
+    always begin
+        clk = 1; #5;
+        clk = 0; #5;
+    end
+    
+    always begin
+        reset = 1; #20;
+        reset = 0; #50;
+        reset = 1; #1000000;
+    end
+    
+    always begin
+        s_axis_fir_tvalid = 0; #100;
+        s_axis_fir_tvalid = 1; #1000;
+        s_axis_fir_tvalid = 0; #50;
+        s_axis_fir_tvalid = 1; #998920;
+    end
+    
+    always begin
+        m_axis_fir_tready = 1; #1500;
+        m_axis_fir_tready = 0; #100;
+        m_axis_fir_tready = 1; #998400;
+    end
+    
+    /* Instantiate FIR module to test. */
+    FIR FIR_i(
+        .clk(clk),
+        .reset(reset),
+        .s_axis_fir_tdata(s_axis_fir_tdata),   
+        .s_axis_fir_tkeep(s_axis_fir_tkeep),   
+        .s_axis_fir_tlast(s_axis_fir_tlast),   
+        .s_axis_fir_tvalid(s_axis_fir_tvalid), 
+        .m_axis_fir_tready(m_axis_fir_tready),
+        .m_axis_fir_tvalid(m_axis_fir_tvalid), 
+        .s_axis_fir_tready(s_axis_fir_tready), 
+        .m_axis_fir_tlast(m_axis_fir_tlast),   
+        .m_axis_fir_tkeep(m_axis_fir_tkeep),   
+        .m_axis_fir_tdata(m_axis_fir_tdata));  
+        
+    reg [4:0] state_reg;
+    reg [3:0] cntr;
+    
+    parameter wvfm_period = 4'd4;
+    
+    parameter init               = 5'd0;
+    parameter sendSample0        = 5'd1;
+    parameter sendSample1        = 5'd2;
+    parameter sendSample2        = 5'd3;
+    parameter sendSample3        = 5'd4;
+    parameter sendSample4        = 5'd5;
+    parameter sendSample5        = 5'd6;
+    parameter sendSample6        = 5'd7;
+    parameter sendSample7        = 5'd8;
+    
+    /* This state machine generates a 200kHz sinusoid. */
+    always @ (posedge clk or posedge reset)
+        begin
+            if (reset == 1'b0)
+                begin
+                    cntr <= 4'd0;
+                    s_axis_fir_tdata <= 16'd0;
+                    state_reg <= init;
+                end
+            else
+                begin
+                    case (state_reg)
+                        init : //0
+                            begin
+                                cntr <= 4'd0;
+                                s_axis_fir_tdata <= 16'h0000;
+                                state_reg <= sendSample0;
+                            end
+                            
+                        sendSample0 : //1
+                            begin
+                                s_axis_fir_tdata <= 16'h0000;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample1;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample0;
+                                    end
+                            end 
+                        
+                        sendSample1 : //2
+                            begin
+                                s_axis_fir_tdata <= 16'h5A7E; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample2;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample1;
+                                    end
+                            end 
+                        
+                        sendSample2 : //3
+                            begin
+                                s_axis_fir_tdata <= 16'h7FFF;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample3;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample2;
+                                    end
+                            end 
+                        
+                        sendSample3 : //4
+                            begin
+                                s_axis_fir_tdata <= 16'h5A7E;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample4;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample3;
+                                    end
+                            end 
+                        
+                        sendSample4 : //5
+                            begin
+                                s_axis_fir_tdata <= 16'h0000;
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample5;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample4;
+                                    end
+                            end 
+                        
+                        sendSample5 : //6
+                            begin
+                                s_axis_fir_tdata <= 16'hA582; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample6;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample5;
+                                    end
+                            end 
+                        
+                        sendSample6 : //6
+                            begin
+                                s_axis_fir_tdata <= 16'h8000; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample7;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample6;
+                                    end
+                            end 
+                        
+                        sendSample7 : //6
+                            begin
+                                s_axis_fir_tdata <= 16'hA582; 
+                                
+                                if (cntr == wvfm_period)
+                                    begin
+                                        cntr <= 4'd0;
+                                        state_reg <= sendSample0;
+                                    end
+                                else
+                                    begin 
+                                        cntr <= cntr + 1;
+                                        state_reg <= sendSample7;
+                                    end
+                            end                     
+                    
+                    endcase
+                end
+        end
+    
+endmodule
+ 
+set_property PACKAGE_PIN W5 [get_ports clk]
+set_property IOSTANDARD LVCMOS33 [get_ports clk]
+create_clock -period 10.000 [get_ports clk] # 100 MHz clock
+
+# Reset Constraint
+# Map reset signal to a pin.
+set_property PACKAGE_PIN V17 [get_ports reset]
+set_property IOSTANDARD LVCMOS33 [get_ports reset]
+
+# s_axis_fir_tdata (Input Data)
+# Map the 16-bit input data to pins.
+set_property PACKAGE_PIN U17 [get_ports {s_axis_fir_tdata[0]}]
+set_property PACKAGE_PIN V16 [get_ports {s_axis_fir_tdata[1]}]
+set_property PACKAGE_PIN U16 [get_ports {s_axis_fir_tdata[2]}]
+set_property PACKAGE_PIN T18 [get_ports {s_axis_fir_tdata[3]}]
+set_property PACKAGE_PIN T17 [get_ports {s_axis_fir_tdata[4]}]
+set_property PACKAGE_PIN R18 [get_ports {s_axis_fir_tdata[5]}]
+set_property PACKAGE_PIN R17 [get_ports {s_axis_fir_tdata[6]}]
+set_property PACKAGE_PIN P18 [get_ports {s_axis_fir_tdata[7]}]
+set_property PACKAGE_PIN P17 [get_ports {s_axis_fir_tdata[8]}]
+set_property PACKAGE_PIN N18 [get_ports {s_axis_fir_tdata[9]}]
+set_property PACKAGE_PIN N17 [get_ports {s_axis_fir_tdata[10]}]
+set_property PACKAGE_PIN M18 [get_ports {s_axis_fir_tdata[11]}]
+set_property PACKAGE_PIN M17 [get_ports {s_axis_fir_tdata[12]}]
+set_property PACKAGE_PIN L18 [get_ports {s_axis_fir_tdata[13]}]
+set_property PACKAGE_PIN L17 [get_ports {s_axis_fir_tdata[14]}]
+set_property PACKAGE_PIN K18 [get_ports {s_axis_fir_tdata[15]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {s_axis_fir_tdata[*]}]
+
+# s_axis_fir_tvalid (Input Valid Signal)
+set_property PACKAGE_PIN J18 [get_ports s_axis_fir_tvalid]
+set_property IOSTANDARD LVCMOS33 [get_ports s_axis_fir_tvalid]
+
+# m_axis_fir_tready (Output Ready Signal)
+set_property PACKAGE_PIN H18 [get_ports m_axis_fir_tready]
+set_property IOSTANDARD LVCMOS33 [get_ports m_axis_fir_tready]
+
+# m_axis_fir_tvalid (Output Valid Signal)
+set_property PACKAGE_PIN G18 [get_ports m_axis_fir_tvalid]
+set_property IOSTANDARD LVCMOS33 [get_ports m_axis_fir_tvalid]
+
+# m_axis_fir_tdata (Output Data)
+# Map the 32-bit output data to pins.
+set_property PACKAGE_PIN F18 [get_ports {m_axis_fir_tdata[0]}]
+set_property PACKAGE_PIN E18 [get_ports {m_axis_fir_tdata[1]}]
+set_property PACKAGE_PIN D18 [get_ports {m_axis_fir_tdata[2]}]
+set_property PACKAGE_PIN C18 [get_ports {m_axis_fir_tdata[3]}]
+set_property PACKAGE_PIN B18 [get_ports {m_axis_fir_tdata[4]}]
+set_property PACKAGE_PIN A18 [get_ports {m_axis_fir_tdata[5]}]
+set_property PACKAGE_PIN Y18 [get_ports {m_axis_fir_tdata[6]}]
+set_property PACKAGE_PIN W18 [get_ports {m_axis_fir_tdata[7]}]
+set_property PACKAGE_PIN V18 [get_ports {m_axis_fir_tdata[8]}]
+set_property PACKAGE_PIN U18 [get_ports {m_axis_fir_tdata[9]}]
+set_property PACKAGE_PIN T19 [get_ports {m_axis_fir_tdata[10]}]
+set_property PACKAGE_PIN R19 [get_ports {m_axis_fir_tdata[11]}]
+set_property PACKAGE_PIN P19 [get_ports {m_axis_fir_tdata[12]}]
+set_property PACKAGE_PIN N19 [get_ports {m_axis_fir_tdata[13]}]
+set_property PACKAGE_PIN M19 [get_ports {m_axis_fir_tdata[14]}]
+set_property PACKAGE_PIN L19 [get_ports {m_axis_fir_tdata[15]}]
+set_property PACKAGE_PIN K19 [get_ports {m_axis_fir_tdata[16]}]
+set_property PACKAGE_PIN J19 [get_ports {m_axis_fir_tdata[17]}]
+set_property PACKAGE_PIN H19 [get_ports {m_axis_fir_tdata[18]}]
+set_property PACKAGE_PIN G19 [get_ports {m_axis_fir_tdata[19]}]
+set_property PACKAGE_PIN F19 [get_ports {m_axis_fir_tdata[20]}]
+set_property PACKAGE_PIN E19 [get_ports {m_axis_fir_tdata[21]}]
+set_property PACKAGE_PIN D19 [get_ports {m_axis_fir_tdata[22]}]
+set_property PACKAGE_PIN C19 [get_ports {m_axis_fir_tdata[23]}]
+set_property PACKAGE_PIN B19 [get_ports {m_axis_fir_tdata[24]}]
+set_property PACKAGE_PIN A19 [get_ports {m_axis_fir_tdata[25]}]
+set_property PACKAGE_PIN Y19 [get_ports {m_axis_fir_tdata[26]}]
+set_property PACKAGE_PIN W19 [get_ports {m_axis_fir_tdata[27]}]
+set_property PACKAGE_PIN V19 [get_ports {m_axis_fir_tdata[28]}]
+set_property PACKAGE_PIN U19 [get_ports {m_axis_fir_tdata[29]}]
+set_property PACKAGE_PIN T20 [get_ports {m_axis_fir_tdata[30]}]
+set_property PACKAGE_PIN R20 [get_ports {m_axis_fir_tdata[31]}]
+set_property IOSTANDARD LVCMOS33 [get_ports {m_axis_fir_tdata[*]}]
